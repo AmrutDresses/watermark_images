@@ -2,127 +2,114 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Image Watermark Tool</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <title>Watermark & Share</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; margin: 20px; background: #f0f2f5; line-height: 1.6; }
-        .container { max-width: 800px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        h2 { color: #387ed1; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-        .input-group { margin-bottom: 20px; display: flex; flex-direction: column; gap: 10px; }
-        label { font-weight: bold; font-size: 0.9rem; }
-        input[type="text"], input[type="file"] { padding: 12px; border: 1px solid #ddd; border-radius: 6px; }
-        button { padding: 15px; background: #387ed1; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1rem; }
-        button:hover { background: #2a62a3; }
-        button:disabled { background: #ccc; cursor: not-allowed; }
-        #status { margin-top: 20px; font-weight: bold; color: #2e7d32; }
-        .preview-container { margin-top: 20px; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
-        canvas { display: none; } /* Hidden canvas used for processing */
-        .thumb { width: 100%; border-radius: 4px; border: 1px solid #ddd; }
+        body { font-family: 'Segoe UI', sans-serif; margin: 20px; background: #f0f2f5; text-align: center; }
+        .container { max-width: 700px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .input-group { margin-bottom: 20px; text-align: left; display: flex; flex-direction: column; gap: 8px; }
+        input { padding: 12px; border: 1px solid #ddd; border-radius: 6px; }
+        button { padding: 15px; background: #25d366; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; }
+        button:hover { background: #128c7e; }
+        .result-item { margin-top: 30px; border-top: 2px solid #eee; padding-top: 20px; }
+        .preview-img { width: 100%; max-width: 400px; border-radius: 8px; margin-bottom: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+        .share-btn { background: #387ed1; margin-bottom: 20px; width: auto; padding: 10px 25px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>📸 Batch Watermark & Rename</h2>
+    <h2>📸 Watermark & Share</h2>
     
     <div class="input-group">
-        <label>1. Watermark Text (Will also be the filename)</label>
-        <input type="text" id="watermarkText" placeholder="Enter description..." value="A101670350R100F * SOFT PURE CAMBRIC COTTON">
+        <label>Watermark Text</label>
+        <input type="text" id="watermarkText" value="A101670350R100F * SOFT PURE CAMBRIC COTTON">
     </div>
 
     <div class="input-group">
-        <label>2. Select Images</label>
+        <label>Select Images</label>
         <input type="file" id="imageInput" accept="image/*" multiple>
     </div>
 
-    <button id="processBtn">Process & Download ZIP</button>
+    <button onclick="processImages()">Apply Watermark to All</button>
 
-    <div id="status"></div>
-    <div class="preview-container" id="previewArea"></div>
+    <div id="outputArea"></div>
 </div>
 
 <script>
-    const processBtn = document.getElementById('processBtn');
-    const imageInput = document.getElementById('imageInput');
-    const status = document.getElementById('status');
-    const previewArea = document.getElementById('previewArea');
-
-    processBtn.addEventListener('click', async () => {
-        const files = imageInput.files;
+    async function processImages() {
+        const files = document.getElementById('imageInput').files;
         const text = document.getElementById('watermarkText').value;
+        const outputArea = document.getElementById('outputArea');
         
-        if (files.length === 0) {
-            alert("Please select some images first!");
-            return;
-        }
-
-        processBtn.disabled = true;
-        status.innerText = "🔄 Processing images... please wait.";
-        previewArea.innerHTML = '';
-        
-        const zip = new JSZip();
-        const cleanName = text.replace(/[\\/*?:"<>|]/g, "").trim();
+        if (files.length === 0) return alert("Select images!");
+        outputArea.innerHTML = "<p>Processing...</p>";
 
         for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            const img = await loadImage(file);
-            
-            // Create canvas to draw watermark
+            const img = await loadImage(files[i]);
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
+            
             canvas.width = img.width;
             canvas.height = img.height;
-
-            // Draw Original Image
             ctx.drawImage(img, 0, 0);
 
-            // Watermark Settings (Matching your Python logic)
+            // Text styling matching your Python logic
             const fontSize = Math.floor(canvas.width * 0.04);
             ctx.font = `bold ${fontSize}px Arial`;
-            ctx.textBaseline = 'top';
-            
             const margin = canvas.width * 0.02;
-            const shadowOffset = Math.max(1, fontSize * 0.05);
+            const shadow = Math.max(1, fontSize * 0.05);
 
-            // Draw Shadow
+            // Draw Shadow & Text
             ctx.fillStyle = 'black';
-            ctx.fillText(text, margin + shadowOffset, margin + shadowOffset);
-
-            // Draw Main Text
+            ctx.fillText(text, margin + shadow, margin + shadow + fontSize);
             ctx.fillStyle = 'white';
-            ctx.fillText(text, margin, margin);
+            ctx.fillText(text, margin, margin + fontSize);
 
-            // Convert to Blob
-            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+            const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.95));
+            const file = new File([blob], `${text.substring(0,20)}_${i+1}.jpg`, { type: "image/jpeg" });
+            const url = URL.createObjectURL(blob);
+
+            // Create display element
+            const item = document.createElement('div');
+            item.className = 'result-item';
+            item.innerHTML = `
+                <img src="${url}" class="preview-img"><br>
+                <button class="share-btn" onclick="shareFile('${i}')">Share Image ${i+1}</button>
+            `;
             
-            // Add to ZIP
-            zip.file(`${cleanName}_${i + 1}.jpg`, blob);
-
-            // Add small preview to screen
-            const thumb = document.createElement('img');
-            thumb.src = URL.createObjectURL(blob);
-            thumb.className = 'thumb';
-            previewArea.appendChild(thumb);
+            // Store file for sharing
+            item.dataset.fileIndex = i;
+            window[`file_${i}`] = file;
+            
+            outputArea.appendChild(item);
         }
+        outputArea.firstChild.remove(); // Remove "Processing..."
+    }
 
-        // Generate and Download ZIP
-        const content = await zip.generateAsync({type: "blob"});
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(content);
-        link.download = `${cleanName}_Watermarked.zip`;
-        link.click();
+    async function shareFile(index) {
+        const file = window[`file_${index}`];
+        
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    files: [file],
+                    title: 'Watermarked Fabric',
+                    text: document.getElementById('watermarkText').value
+                });
+            } catch (err) {
+                console.log("Share failed:", err);
+            }
+        } else {
+            alert("Your browser doesn't support direct sharing. Please long-press the image to save/share.");
+        }
+    }
 
-        status.innerText = "✅ Done! All images watermarked and zipped.";
-        processBtn.disabled = false;
-    });
-
-    // Helper function to load image file into Image object
     function loadImage(file) {
-        return new Promise((resolve) => {
+        return new Promise(r => {
             const reader = new FileReader();
-            reader.onload = (e) => {
+            reader.onload = e => {
                 const img = new Image();
-                img.onload = () => resolve(img);
+                img.onload = () => r(img);
                 img.src = e.target.result;
             };
             reader.readAsDataURL(file);
