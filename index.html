@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Image Watermark Tool</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; margin: 20px; background: #f0f2f5; line-height: 1.6; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h2 { color: #387ed1; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .input-group { margin-bottom: 20px; display: flex; flex-direction: column; gap: 10px; }
+        label { font-weight: bold; font-size: 0.9rem; }
+        input[type="text"], input[type="file"] { padding: 12px; border: 1px solid #ddd; border-radius: 6px; }
+        button { padding: 15px; background: #387ed1; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1rem; }
+        button:hover { background: #2a62a3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        #status { margin-top: 20px; font-weight: bold; color: #2e7d32; }
+        .preview-container { margin-top: 20px; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+        canvas { display: none; } /* Hidden canvas used for processing */
+        .thumb { width: 100%; border-radius: 4px; border: 1px solid #ddd; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>📸 Batch Watermark & Rename</h2>
+    
+    <div class="input-group">
+        <label>1. Watermark Text (Will also be the filename)</label>
+        <input type="text" id="watermarkText" placeholder="Enter description..." value="A101670350R100F * SOFT PURE CAMBRIC COTTON">
+    </div>
+
+    <div class="input-group">
+        <label>2. Select Images</label>
+        <input type="file" id="imageInput" accept="image/*" multiple>
+    </div>
+
+    <button id="processBtn">Process & Download ZIP</button>
+
+    <div id="status"></div>
+    <div class="preview-container" id="previewArea"></div>
+</div>
+
+<script>
+    const processBtn = document.getElementById('processBtn');
+    const imageInput = document.getElementById('imageInput');
+    const status = document.getElementById('status');
+    const previewArea = document.getElementById('previewArea');
+
+    processBtn.addEventListener('click', async () => {
+        const files = imageInput.files;
+        const text = document.getElementById('watermarkText').value;
+        
+        if (files.length === 0) {
+            alert("Please select some images first!");
+            return;
+        }
+
+        processBtn.disabled = true;
+        status.innerText = "🔄 Processing images... please wait.";
+        previewArea.innerHTML = '';
+        
+        const zip = new JSZip();
+        const cleanName = text.replace(/[\\/*?:"<>|]/g, "").trim();
+
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const img = await loadImage(file);
+            
+            // Create canvas to draw watermark
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = img.width;
+            canvas.height = img.height;
+
+            // Draw Original Image
+            ctx.drawImage(img, 0, 0);
+
+            // Watermark Settings (Matching your Python logic)
+            const fontSize = Math.floor(canvas.width * 0.04);
+            ctx.font = `bold ${fontSize}px Arial`;
+            ctx.textBaseline = 'top';
+            
+            const margin = canvas.width * 0.02;
+            const shadowOffset = Math.max(1, fontSize * 0.05);
+
+            // Draw Shadow
+            ctx.fillStyle = 'black';
+            ctx.fillText(text, margin + shadowOffset, margin + shadowOffset);
+
+            // Draw Main Text
+            ctx.fillStyle = 'white';
+            ctx.fillText(text, margin, margin);
+
+            // Convert to Blob
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+            
+            // Add to ZIP
+            zip.file(`${cleanName}_${i + 1}.jpg`, blob);
+
+            // Add small preview to screen
+            const thumb = document.createElement('img');
+            thumb.src = URL.createObjectURL(blob);
+            thumb.className = 'thumb';
+            previewArea.appendChild(thumb);
+        }
+
+        // Generate and Download ZIP
+        const content = await zip.generateAsync({type: "blob"});
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(content);
+        link.download = `${cleanName}_Watermarked.zip`;
+        link.click();
+
+        status.innerText = "✅ Done! All images watermarked and zipped.";
+        processBtn.disabled = false;
+    });
+
+    // Helper function to load image file into Image object
+    function loadImage(file) {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+</script>
+
+</body>
+</html>
