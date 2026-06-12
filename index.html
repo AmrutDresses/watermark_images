@@ -2,117 +2,262 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Watermark & Share</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Watermark & Share</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; margin: 20px; background: #f0f2f5; text-align: center; }
-        .container { max-width: 700px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        .input-group { margin-bottom: 20px; text-align: left; display: flex; flex-direction: column; gap: 8px; }
-        input { padding: 12px; border: 1px solid #ddd; border-radius: 6px; }
-        button { padding: 15px; background: #25d366; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; }
-        button:hover { background: #128c7e; }
-        .result-item { margin-top: 30px; border-top: 2px solid #eee; padding-top: 20px; }
-        .preview-img { width: 100%; max-width: 400px; border-radius: 8px; margin-bottom: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
-        .share-btn { background: #387ed1; margin-bottom: 20px; width: auto; padding: 10px 25px; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f5f5f7;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            max-width: 500px;
+            width: 100%;
+            background: #ffffff;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            box-sizing: border-box;
+        }
+        h2 {
+            margin-top: 0;
+            text-align: center;
+            color: #1d1d1f;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        input[type="text"], input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 16px; /* Prevents auto-zoom on iOS */
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #0071e3;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: background 0.2s;
+        }
+        button:disabled {
+            background-color: #a2a2a2;
+            cursor: not-allowed;
+        }
+        #status {
+            margin-top: 15px;
+            font-size: 14px;
+            color: #555;
+            text-align: center;
+            white-space: pre-line;
+        }
+        .preview-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px;
+            margin-top: 15px;
+        }
+        .preview-img {
+            width: 100%;
+            aspect-ratio: 1;
+            object-fit: cover;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>📸 Watermark & Share</h2>
+    <h2>Watermark & Share</h2>
     
-    <div class="input-group">
-        <label>Watermark Text</label>
-        <input type="text" id="watermarkText" value=" ">
+    <div class="form-group">
+        <label for="watermarkText">Watermark Text:</label>
+        <input type="text" id="watermarkText" value="A251200120620261555 ROMAN SILK LEHENGA" placeholder="Enter text...">
     </div>
 
-    <div class="input-group">
-        <label>Select Images</label>
+    <div class="form-group">
+        <label for="imageInput">Select Images (Max 10):</label>
         <input type="file" id="imageInput" accept="image/*" multiple>
     </div>
 
-    <button onclick="processImages()">Apply Watermark to All</button>
+    <button id="processBtn" disabled>Process Images</button>
+    <button id="shareBtn" style="display: none; background-color: #34c759;">Share Watermarked Images</button>
 
-    <div id="outputArea"></div>
+    <div id="status"></div>
+    <div class="preview-container" id="previewContainer"></div>
 </div>
 
 <script>
-    async function processImages() {
-        const files = document.getElementById('imageInput').files;
-        const text = document.getElementById('watermarkText').value;
-        const outputArea = document.getElementById('outputArea');
-        
-        if (files.length === 0) return alert("Select images!");
-        outputArea.innerHTML = "<p>Processing...</p>";
+    const imageInput = document.getElementById('imageInput');
+    const watermarkTextInput = document.getElementById('watermarkText');
+    const processBtn = document.getElementById('processBtn');
+    const shareBtn = document.getElementById('shareBtn');
+    const statusDiv = document.getElementById('status');
+    const previewContainer = document.getElementById('previewContainer');
+
+    let processedFiles = []; // Holds the final File objects for Web Share
+
+    // Enable process button when files are picked
+    imageInput.addEventListener('change', () => {
+        if (imageInput.files.length > 0) {
+            if (imageInput.files.length > 10) {
+                alert("Please select a maximum of 10 images.");
+                imageInput.value = "";
+                processBtn.disabled = true;
+                return;
+            }
+            processBtn.disabled = false;
+            statusDiv.textContent = `${imageInput.files.length} image(s) selected. Click "Process Images"`;
+        } else {
+            processBtn.disabled = true;
+        }
+    });
+
+    // Clean filenames just like slugify_filename in your Python script
+    function slugifyFilename(text) {
+        return text.replace(/[\\/*?:"<>|]/g, "").trim();
+    }
+
+    // Main logic runner
+    processBtn.addEventListener('click', async () => {
+        const files = imageInput.files;
+        const watermarkText = watermarkTextInput.value;
+        const cleanFilename = slugifyFilename(watermarkText);
+
+        if (!files.length || !watermarkText) return;
+
+        statusDiv.textContent = "Processing images... please wait.";
+        previewContainer.innerHTML = "";
+        processedFiles = [];
+        shareBtn.style.display = 'none';
 
         for (let i = 0; i < files.length; i++) {
-            const img = await loadImage(files[i]);
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            
-            canvas.width = img.width;
-            canvas.height = img.height;
-            ctx.drawImage(img, 0, 0);
-
-            // Text styling matching your Python logic
-            const fontSize = Math.floor(canvas.width * 0.04);
-            ctx.font = `bold ${fontSize}px Arial`;
-            const margin = canvas.width * 0.02;
-            const shadow = Math.max(1, fontSize * 0.05);
-
-            // Draw Shadow & Text
-            ctx.fillStyle = 'black';
-            ctx.fillText(text, margin + shadow, margin + shadow + fontSize);
-            ctx.fillStyle = 'white';
-            ctx.fillText(text, margin, margin + fontSize);
-
-            const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.95));
-            const file = new File([blob], `${text.substring(0,20)}_${i+1}.jpg`, { type: "image/jpeg" });
-            const url = URL.createObjectURL(blob);
-
-            // Create display element
-            const item = document.createElement('div');
-            item.className = 'result-item';
-            item.innerHTML = `
-                <img src="${url}" class="preview-img"><br>
-                <button class="share-btn" onclick="shareFile('${i}')">Share Image ${i+1}</button>
-            `;
-            
-            // Store file for sharing
-            item.dataset.fileIndex = i;
-            window[`file_${i}`] = file;
-            
-            outputArea.appendChild(item);
-        }
-        outputArea.firstChild.remove(); // Remove "Processing..."
-    }
-
-    async function shareFile(index) {
-        const file = window[`file_${index}`];
-        
-        if (navigator.share) {
             try {
-                await navigator.share({
-                    files: [file],
-                    title: 'Watermarked Fabric',
-                    text: document.getElementById('watermarkText').value
-                });
-            } catch (err) {
-                console.log("Share failed:", err);
-            }
-        } else {
-            alert("Your browser doesn't support direct sharing. Please long-press the image to save/share.");
-        }
-    }
+                const file = files[i];
+                const img = await loadImage(file);
+                
+                // Set up canvas sizes to match original image dimensions
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                
+                // Draw original image
+                ctx.drawImage(img, 0, 0);
 
+                // Dynamic Font Setup (4% of image width)
+                let fontSize = Math.floor(img.width * 0.04);
+                ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+
+                // Shrink font if text layout is wider than 95% of image width
+                while (ctx.measureText(watermarkText).width > (img.width * 0.95)) {
+                    fontSize -= 2;
+                    ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+                }
+
+                // Margins & positioning (Top-Left corner match)
+                const margin = Math.floor(img.width * 0.02);
+                const x = margin;
+                // textBaseline top needs accurate Y offset matching
+                ctx.textBaseline = "top";
+                const y = margin;
+
+                // Draw Text Shadow
+                const shadowOffset = Math.max(1, Math.floor(fontSize * 0.05));
+                ctx.fillStyle = "rgba(0, 0, 0, 1)";
+                ctx.fillText(watermarkText, x + shadowOffset, y + shadowOffset);
+
+                // Draw Main Text
+                ctx.fillStyle = "rgba(255, 255, 255, 1)";
+                ctx.fillText(watermarkText, x, y);
+
+                // Generate exact filename match (e.g., text_1.jpg)
+                const newFilename = `${cleanFilename}_${i + 1}.jpg`;
+
+                // Convert canvas data to blob -> to file object
+                const blob = await getCanvasBlob(canvas);
+                const processedFile = new File([blob], newFilename, { type: "image/jpeg" });
+                processedFiles.push(processedFile);
+
+                // Append UI Preview thumbnail
+                const previewImg = document.createElement('img');
+                previewImg.src = URL.createObjectURL(blob);
+                previewImg.className = 'preview-img';
+                previewContainer.appendChild(previewImg);
+
+            } catch (err) {
+                console.error(err);
+                statusDiv.textContent += `\nError processing image ${i + 1}`;
+            }
+        }
+
+        statusDiv.textContent = `Successfully processed ${processedFiles.length} images!`;
+        if (processedFiles.length > 0) {
+            shareBtn.style.display = 'block';
+        }
+    });
+
+    // Native sharing logic
+    shareBtn.addEventListener('click', async () => {
+        if (!navigator.canShare || !navigator.canShare({ files: processedFiles })) {
+            alert("Your mobile browser doesn't support direct native file sharing. Try using modern Chrome or Safari.");
+            return;
+        }
+
+        try {
+            // Strictly sharing files only, no text parameters included
+            await navigator.share({
+                files: processedFiles
+            });
+            statusDiv.textContent = "Images shared successfully!";
+        } catch (error) {
+            if (error.name !== 'AbortError') {
+                alert("Sharing failed: " + error.message);
+            }
+        }
+    });
+
+    // Promisified Image Loader
     function loadImage(file) {
-        return new Promise(r => {
+        return new Promise((resolve, reject) => {
             const reader = new FileReader();
-            reader.onload = e => {
+            reader.onload = (e) => {
                 const img = new Image();
-                img.onload = () => r(img);
+                img.onload = () => resolve(img);
+                img.onerror = reject;
                 img.src = e.target.result;
             };
+            reader.onerror = reject;
             reader.readAsDataURL(file);
+        });
+    }
+
+    // Promisified Canvas Blob Exporter
+    function getCanvasBlob(canvas) {
+        return new Promise((resolve) => {
+            canvas.toBlob((blob) => {
+                resolve(blob);
+            }, 'image/jpeg', 0.95); // Matching python 95% quality parameter
         });
     }
 </script>
